@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "config_source": "current_file",
+  "discord_token": "ODA4MDg3NzY3NDAxMTAzNDAw.YCBcYQ.yhQ2hdeCt9X-7fS4MJtRynAXnBw",
+  "modules": [
+    {
+      "id": "module1",
+      "name": "test_module",
+      "source": {
+        "source": "local",
+        "local_path": "./modules/test_module.js"
+      },
+      "dependencies": [
+        "omnibot:core",
+        "omnibot:discordclient",
+        "npm:axios"
+      ]
+    },
+    {
+      "id": "module3",
+      "source": {
+        "source": "local",
+        "local_path": "./modules/another_module.js"
+      },
+      "dependencies": [
+        "omnibot:core",
+        "omnibot:module:module1"
+      ]
+    }
+  ],
+  "disabled_modules": [
+    {
+      "id": "module2",
+      "source": {
+        "source": "local",
+        "local_path": "./modules/another_module.js"
+      },
+      "dependencies": [
+        "omnibot:core",
+        "npm:axios"
+      ]
+    }
+  ],
+  "guilds": [
+    {
+      "id": "477355205923569674",
+      "permissions": 8,
+      "modules": [
+        "test_module"
+      ]
+    }
+  ]
+}

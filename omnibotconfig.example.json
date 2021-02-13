@@ -1,0 +1,53 @@
+{
+  // Only version 1 is supported now. Required.
+  "version": 1,
+  // Only current_file is currently supported. Required.
+  "config_source": "current_file",
+  // Discord bot token. Required.
+  "discord_token": "here_is_my_discord_token_dont_share_it",
+  // List of modules to load.
+  "modules": [
+    {
+      // Unique ID for the module. Required, must be unique.
+      "id": "test_module",
+      // Friendly name for the module. Optional, if omitted defaults to the id.
+      "name": "test_module",
+      "source": {
+        // Only "local" is currently supported.
+        "source": "local",
+        // Include a relative (or absolute) path to the module file.
+        "local_path": "./modules/test_module.js"
+      },
+      // If specified, only actions from these guilds will be sent to this module.
+      // To run this module on all guilds, omit this.
+      "guild_allowlist": [],
+      // If specified, actions from these guilds will be excluded from this module.
+      // To block this module from running on all guilds (like for a pure dependency), add "*" only.
+      "guild_blocklist": [],
+      // Module dependencies.
+      "dependencies": [
+        // omnibot:core is required for all modules.
+        "omnibot:core",
+        // omnibot:discordclietn allows the module to access the Discord Client directly.
+        // This is a dangerous permission. At minimum, it allows the module to bypass both guild_allowlist and guild_blocklist.
+        // It gives the module full control over your bot on all guilds. Be careful, and consider it like the Discord Administrator permission.
+        "omnibot:discordclient",
+        // Add npm modules with npm:<module name>.
+        // If they're not currently installed, they'll be automatically installed before the module is loaded.
+        "npm:axios",
+        // Modules can require other modules. Dependencies will be initialized before this module.
+        // Syntax: omnibot:module:<module id>
+        "omnibot:module:another_module"
+      ]
+    }
+  ],
+  "guilds": [
+    {
+      "id": "477355205923569674",
+      "permissions": 8,
+      "modules": [
+        "test_module"
+      ]
+    }
+  ]
+}

@@ -104,5 +104,3 @@ async function init() {
   );
 }
 init();
-
-// setTimeout(() => moduleManager.unloadModule("test_module"), 10000);

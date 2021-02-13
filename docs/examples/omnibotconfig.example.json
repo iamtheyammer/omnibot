@@ -18,35 +18,20 @@
         // Include a relative (or absolute) path to the module file.
         "local_path": "./modules/test_module.js"
       },
-      // If specified, only actions from these guilds will be sent to this module.
-      // To run this module on all guilds, omit this.
-      "guild_allowlist": [],
-      // If specified, actions from these guilds will be excluded from this module.
-      // To block this module from running on all guilds (like for a pure dependency), add "*" only.
-      "guild_blocklist": [],
       // Module dependencies.
       "dependencies": [
         // omnibot:core is required for all modules.
         "omnibot:core",
-        // omnibot:discordclietn allows the module to access the Discord Client directly.
-        // This is a dangerous permission. At minimum, it allows the module to bypass both guild_allowlist and guild_blocklist.
+        // omnibot:discordclient allows the module to access the Discord Client directly.
         // It gives the module full control over your bot on all guilds. Be careful, and consider it like the Discord Administrator permission.
         "omnibot:discordclient",
         // Add npm modules with npm:<module name>.
         // If they're not currently installed, they'll be automatically installed before the module is loaded.
         "npm:axios",
         // Modules can require other modules. Dependencies will be initialized before this module.
+        // See dependencies.md for more info.
         // Syntax: omnibot:module:<module id>
         "omnibot:module:another_module"
-      ]
-    }
-  ],
-  "guilds": [
-    {
-      "id": "477355205923569674",
-      "permissions": 8,
-      "modules": [
-        "test_module"
       ]
     }
   ]

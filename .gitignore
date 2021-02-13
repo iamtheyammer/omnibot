@@ -109,3 +109,5 @@ dist
 modules/
 
 omnibotconfig.json
+
+.DS_Store

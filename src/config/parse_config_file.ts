@@ -171,7 +171,7 @@ export default async function parseConfigFile(
           logger.info(`Successfully fetched module ${m.id}!`);
 
           if (
-            remoteModuleConfig.dependencies &&
+            m.dependencies &&
             !isEqual(m.dependencies, remoteModuleConfig.dependencies)
           ) {
             logger.warn(

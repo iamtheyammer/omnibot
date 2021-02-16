@@ -93,7 +93,7 @@ async function init() {
 
   try {
     logger.info("Parsing config file...");
-    config = await parseConfigFile(configFile, client);
+    config = await parseConfigFile(configFile);
   } catch (e) {
     logger.fatal(`Fatal error parsing config: ${e}`);
     process.exit(1);

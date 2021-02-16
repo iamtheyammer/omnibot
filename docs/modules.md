@@ -5,7 +5,7 @@ Modules can act as discord "bots", or they can just assist other modules.
 
 Modules are written in JavaScript, and can be local or fetched from the web.
 
-- If you want to load a module someone else wrote, check out [Loading Modules](#loading-modules).
+- If you want to load a module you (or someone else) wrote, check out [Loading Modules](#loading-modules).
 - If you're a developer and want to write a module, check out [Writing Modules](#writing-modules).
 
 ## Loading Modules
@@ -115,14 +115,14 @@ If you specify a dependencies array, it will be used. No matter what.
 If you want to go along with the module author's recommendation, just leave the
 dependencies array out.
 
-Just add the following to your config file (_after_ changing the id and url to match yours):
+Just add the following to your config file (make sure to change the id and url!):
 
 ```json
 {
-  "id": "tic-tac-toe-bot",
+  "id": "example-remote-module",
   "source": {
     "source": "remote",
-    "url": "link to the module config file the author gave you"
+    "url": "https://iamtheyammer.github.io/omnibot/remote_modules/example_module_config.json"
   }
 }
 ```
@@ -131,6 +131,19 @@ Note: the module above will use the author's recommended dependencies.
 To see those, just visit the config url and look for dependencies.
 If you specify a dependencies array, it will **always** be used, no matter
 what the module author specifies.
+
+If you'd like to try an example remote module that just prints every message, 
+add the following to your modules array:
+
+```json
+{
+  "id": "example-module",
+  "source": {
+    "source": "remote",
+    "url": "https://iamtheyammer.github.io/omnibot/examples/remote_modules/example_module_config.json"
+  }
+}
+```
 
 ## Writing Modules
 
@@ -152,7 +165,7 @@ module.exports.init = function (initOmnibot) {
     // please use the omnibot logger!
     // it shows which module is logging.
     // the following levels are available (omnibot.logger.<level>):
-    // debug, info, warn, error, fatal
+    // debug, info (AKA log), warn, error, fatal
     omnibot.logger.info(
       `${msg.user} said "${msg.content}"!`
     );
@@ -184,7 +197,7 @@ Just make sure that each package is in your dependencies. The above code require
 
 ### Using Intermodule Dependencies
 
-If your module requires another (and has `omnibot:module:<module id>` in its dependency list),
+If your module requires another (by adding `omnibot:module:<module id>` to its dependency list),
 you'll be able to access exports from other modules!
 
 Call them like this (where `util-module` is the module we are requesting):
@@ -195,6 +208,10 @@ const util = omnibot.modules["util-module"];
 // you can also do this!
 omnibot.modules["util-module"].someFunction();
 ```
+
+For remote module authors, you might notice that we need the ID of the module, not the name.
+This requires the person running the bot needs to match up the ids. We recommend that you
+recommend IDs for your remote modules.
 
 ### Exporting for other modules
 
@@ -210,6 +227,7 @@ let omnibot;
 
 // this line is REQUIRED by Node.js!
 // if it's not there, it'll be like you didn't export anything at all.
+// don't worry-- you can add dynamic exports in your init function!
 module.exports.omnibotExports = {};
 
 // since the init function is called before exports are requested,
@@ -242,8 +260,7 @@ Note that URLs must start with either `https://` or `http://localhost`.
 
 While not required, we highly recommend you set the `Content-Type` header of your
 config file to `application/json` and the `Content-Type` header of your code to
-`application/javascript`. If you dont, users will see a warning.
-
+`application/javascript`. If you don't, users will see a warning.
 
 ### Remote Module Configuration File
 
@@ -259,7 +276,7 @@ Host a simple JSON file like this:
 {
   "schema_version": 1,
   "name": "Remote module",
-  "code_url": "https://example.com/omnibot/modules/remote_module.js",
+  "code_url": "https://iamtheyammer.github.io/omnibot/examples/remote_modules/example_module.js",
   "checksum": {
     "sha256": "9f585a6943b6b385451b9bff6a9fcecf8cc3c2b7d1397eed19449c8f3b35cdf2"
   },
@@ -270,15 +287,15 @@ Host a simple JSON file like this:
 }
 ```
 
-- `version` should always be 1.
+- `schema_version` should always be 1.
 - `name` is required, and is a **human-readable** name for your module.
 - `code_url` is where your code can be found.
 - `checksum.sha256` is a required SHA256 checksum of your code.
 If this checksum doesn't match the checksum of the downloaded file, the module will not be loaded.
 - `dependencies` is a recommended array of dependencies. If the config file for the Omnibot that
 imports this module specifies a dependencies array, it will **always** be used. This means
-  you'll want to check for every dependency you specify. 
-  (You can also call `omnibot.dependencies.hasDependency()` to figure it out).
+  you'll want to check for every dependency you specify.
+  (You can call `omnibot.dependencies.hasDependency()` in your module to ensure dependencies).
   
 ### Remote Module Code
 

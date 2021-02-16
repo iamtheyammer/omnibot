@@ -27,57 +27,56 @@ export default class ModuleManager {
   async loadModule(module: OmnibotModule) {
     logger.info(`Loading module ${module.id}...`);
     const managedModule = module as ManagedModule;
-    if (module.source.source === "local" && module.source.local_path) {
-      // load file
-      const normalizedPath = resolve(normalize(module.source.local_path));
 
-      const moduleDependencies = this.depedencyManager.getModuleDependenciesForModule(
-        module.id
-      );
-      const moduleDependencyInjection: { [moduleId: string]: any } = {};
+    // load file
+    const normalizedPath = resolve(normalize(module.source.local_path));
 
-      moduleDependencies.forEach((mDep) => {
-        const depExport = this.moduleExports[mDep];
+    const moduleDependencies = this.depedencyManager.getModuleDependenciesForModule(
+      module.id
+    );
+    const moduleDependencyInjection: { [moduleId: string]: any } = {};
 
-        if (!depExport) {
-          logger.error(`${module.id} depends on ${mDep}, but its exports aren't available!
+    moduleDependencies.forEach((mDep) => {
+      const depExport = this.moduleExports[mDep];
+
+      if (!depExport) {
+        logger.error(`${module.id} depends on ${mDep}, but its exports aren't available!
           ${module.id} won't be able to access exports from ${mDep}.
           
           Make sure that ${mDep} actually exports something!`);
-          return;
-        }
-
-        logger.debug(`Injecting ${mDep} into ${module.id}`);
-        moduleDependencyInjection[mDep] = depExport;
-      });
-
-      try {
-        logger.info(`Attempting to import from ${normalizedPath}...`);
-        const importedModule = await import(normalizedPath);
-        managedModule.coreDependency = new CoreDependency(
-          module,
-          this.discordClient,
-          moduleDependencyInjection
-        );
-        managedModule.importedCode = importedModule;
-        managedModule.normalizedPath = normalizedPath;
-        importedModule.init(managedModule.coreDependency);
-        if (this.depedencyManager.moduleHasModuleDependents(module.id)) {
-          // we need to call omnibotExports
-          logger.debug(`${module.id} has dependents, caching exports`);
-          this.moduleExports[module.id] = importedModule.omnibotExports;
-          if (!this.moduleExports[module.id]) {
-            logger.error(`Nothing was exported from ${module.id}`);
-          }
-        } else {
-          logger.debug(`${module.id} does not have module dependents`);
-        }
-        this.loadedModules.push(managedModule);
-        this.updateStatus();
-      } catch (e) {
-        logger.error(`Error loading module ${module.id}: ${e}.`);
-        throw e;
+        return;
       }
+
+      logger.debug(`Injecting ${mDep} into ${module.id}`);
+      moduleDependencyInjection[mDep] = depExport;
+    });
+
+    try {
+      logger.info(`Attempting to import from ${normalizedPath}...`);
+      const importedModule = await import(normalizedPath);
+      managedModule.coreDependency = new CoreDependency(
+        module,
+        this.discordClient,
+        moduleDependencyInjection
+      );
+      managedModule.importedCode = importedModule;
+      managedModule.normalizedPath = normalizedPath;
+      importedModule.init(managedModule.coreDependency);
+      if (this.depedencyManager.moduleHasModuleDependents(module.id)) {
+        // we need to call omnibotExports
+        logger.debug(`${module.id} has dependents, caching exports`);
+        this.moduleExports[module.id] = importedModule.omnibotExports;
+        if (!this.moduleExports[module.id]) {
+          logger.error(`Nothing was exported from ${module.id}`);
+        }
+      } else {
+        logger.debug(`${module.id} does not have module dependents`);
+      }
+      this.loadedModules.push(managedModule);
+      this.updateStatus();
+    } catch (e) {
+      logger.error(`Error loading module ${module.id}: ${e}.`);
+      throw e;
     }
 
     logger.info(`Successfully loaded module ${module.id}!`);
@@ -93,6 +92,9 @@ export default class ModuleManager {
   }
 
   private updateStatus() {
+    logger.debug(
+      `Updating status to show ${this.loadedModules.length} modules`
+    );
     if (this.discordClient.user) {
       this.discordClient.user.setActivity(
         `with ${this.loadedModules.length} modules`,

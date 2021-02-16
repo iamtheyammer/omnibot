@@ -106,8 +106,8 @@ dist
 .yarn/
 .pnp.js
 
-modules/
-remote_modules/
+/modules/
+/remote_modules/
 
 omnibotconfig.json
 

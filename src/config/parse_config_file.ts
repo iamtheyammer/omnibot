@@ -5,9 +5,14 @@ import ModuleDependencyManager from "../dependency_manager/module_dependency_man
 import { omnibotDependenciesAreValid } from "../dependency_manager/omnibot_dependencies";
 import fetchRemoteModule, { RemoteModuleConfig } from "./fetch_remote_module";
 import Logger from "../logger";
+import { Client, TextChannel } from "discord.js";
 
 interface RawConfigFile {
   version: number;
+  logging: {
+    destination: ("console" | "discord")[];
+    discord_channel_id?: string;
+  };
   config_source: "current_file" | "remote";
   remote_config_url?: string;
   discord_token: string;
@@ -26,9 +31,14 @@ interface RawOmnibotModule {
   config: any;
 }
 
-export interface Parse_config_file {
+export interface Config {
   version: number;
   config_source: "current_file" | "remote";
+  logging: {
+    destination: ("console" | "discord")[];
+    discord_channel?: TextChannel;
+    discord_channel_id?: string;
+  };
   remote_config_url?: string;
   discord_token: string;
   modules: OmnibotModule[];
@@ -60,7 +70,7 @@ const logger = new Logger("config_parser");
 
 export default async function parseConfigFile(
   configFile: string
-): Promise<Parse_config_file> {
+): Promise<Config> {
   const config = JSON.parse(configFile) as RawConfigFile;
 
   if (config.version !== 1) {
@@ -80,9 +90,10 @@ export default async function parseConfigFile(
   }
 
   // set up final config
-  const finalConfig: Parse_config_file = {
+  const finalConfig: Config = {
     version: config.version,
     config_source: config.config_source,
+    logging: config.logging,
     remote_config_url: config.remote_config_url,
     discord_token: config.discord_token,
     modules: [],

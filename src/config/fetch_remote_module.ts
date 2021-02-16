@@ -76,7 +76,7 @@ export default async function fetchRemoteModule(
 
   logger.debug("Parsing remote module config...");
   let config: RemoteModuleConfig;
-  if (typeof configReq.data === "object") {
+  if (configReq.data instanceof Object) {
     config = configReq.data as RemoteModuleConfig;
   } else {
     try {
@@ -89,7 +89,10 @@ export default async function fetchRemoteModule(
   }
 
   if (config.schema_version !== 1) {
-    throw new InvalidRemoteModuleConfigurationError("Invalid schema version");
+    throw new InvalidRemoteModuleConfigurationError(
+      `Invalid schema version: got ${config.schema_version}, expected 1
+Full remote config recieved: ${JSON.stringify(config)}`
+    );
   }
 
   if (!config.name) {

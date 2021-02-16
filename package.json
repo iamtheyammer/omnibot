@@ -23,7 +23,7 @@
   "scripts": {
     "start": "nodemon --watch 'src/**/*.ts' --exec \"ts-node\" src/index.ts",
     "inspect": "yarn run --inspect ts-node src/index.ts",
-    "build": "ncc build src/index.ts && terser dist/index.js --compress --output dist/omnibot.bundle.js",
+    "build": "ncc build src/index.ts && terser dist/index.js --compress keep_classnames=true --output dist/omnibot.bundle.js",
     "build:dev": "ncc build src/index.ts --source-map"
   }
 }

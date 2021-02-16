@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { normalize } from "path";
+import { normalize, resolve } from "path";
 import { isEqual } from "lodash";
 import ModuleDependencyManager from "../dependency_manager/module_dependency_manager";
 import { omnibotDependenciesAreValid } from "../dependency_manager/omnibot_dependencies";
@@ -140,10 +140,12 @@ export default async function parseConfigFile(
           }
 
           try {
-            require.resolve(normalize(m.source.local_path));
-          } catch {
+            const localPath = resolve(normalize(m.source.local_path));
+            logger.debug(`Attempting to resolve ${m.id} from ${localPath}`);
+            require.resolve(localPath);
+          } catch (e) {
             err(
-              `module (${m.source.local_path}) either does not exist or is not readable`,
+              `module (${m.source.local_path}) either does not exist or is not readable: ${e}`,
               idx
             );
           }

@@ -1,6 +1,6 @@
 import { Client } from "discord.js";
 import { timeout, TimeoutError } from "promise-timeout";
-import { OmnibotModule } from "../config";
+import { OmnibotModule } from "../config/parse_config_file";
 import Logger from "../logger";
 
 interface Listeners {

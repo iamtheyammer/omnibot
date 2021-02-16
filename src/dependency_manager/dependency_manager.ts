@@ -2,7 +2,7 @@ import { readFile } from "fs/promises";
 import { normalize } from "path";
 import { install as installPackages } from "pkg-install";
 import Logger from "../logger";
-import { OmnibotModule } from "../config";
+import { OmnibotModule } from "../config/parse_config_file";
 import * as Process from "process";
 
 interface ProcessedDependency {

@@ -1,13 +1,13 @@
 import { readFile } from "fs/promises";
 import { normalize } from "path";
 import * as Discord from "discord.js";
-import parseConfigFile, { Config } from "./config";
+import parseConfigFile, { Parse_config_file } from "./config/parse_config_file";
 import Logger from "./logger";
 import ModuleManager from "./module_manager/module_manager";
 import chalk from "chalk";
 import { DependencyManager } from "./dependency_manager/dependency_manager";
 
-let config: Config | string[];
+let config: Parse_config_file | string[];
 const logger = new Logger("core");
 
 const client = new Discord.Client();
@@ -104,3 +104,5 @@ async function init() {
   );
 }
 init();
+
+// setTimeout(() => moduleManager.unloadModule("module3"), 10000);

@@ -1,6 +1,6 @@
 import { Client } from "discord.js";
 import { normalize, resolve } from "path";
-import { OmnibotModule } from "../config";
+import { OmnibotModule } from "../config/parse_config_file";
 import CoreDependency from "../core_dependency";
 import Logger from "../logger";
 import { DependencyManager } from "../dependency_manager/dependency_manager";

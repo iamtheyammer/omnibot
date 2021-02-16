@@ -2,7 +2,8 @@ import chalk from "chalk";
 import { access } from "fs/promises";
 import { constants as fsConstants } from "fs";
 import { normalize } from "path";
-import ModuleDependencyManager from "./dependency_manager/module_dependency_manager";
+import ModuleDependencyManager from "../dependency_manager/module_dependency_manager";
+import { omnibotDependenciesAreValid } from "../dependency_manager/omnibot_dependencies";
 
 interface RawConfigFile {
   version: number;
@@ -20,13 +21,11 @@ interface RawOmnibotModule {
     local_path?: string;
     remote_url?: string;
   };
-  guild_allowlist?: string[];
-  guild_blocklist?: string[];
   dependencies: string[];
   config: any;
 }
 
-export interface Config {
+export interface Parse_config_file {
   version: number;
   config_source: "current_file" | "remote";
   remote_config_url?: string;
@@ -42,8 +41,6 @@ export interface OmnibotModule {
     local_path?: string;
     remote_url?: string;
   };
-  guild_allowlist?: string[];
-  guild_blocklist?: string[];
   dependencies: ModuleDependencyManager;
   config: any;
 }
@@ -61,12 +58,11 @@ class ConfigError extends Error {
   }
 }
 
-const discordIdRegex = /^[0-9]+$/;
-const simpleDependencyRegex = /^(omnibot|npm):[0-z]+$/;
+const simpleDependencyRegex = /^(omnibot|npm):.+$/;
 
 export default async function parseConfigFile(
   configFile: string
-): Promise<Config> {
+): Promise<Parse_config_file> {
   const config = JSON.parse(configFile) as RawConfigFile;
 
   if (config.version !== 1) {
@@ -86,7 +82,7 @@ export default async function parseConfigFile(
   }
 
   // set up final config
-  const finalConfig: Config = {
+  const finalConfig: Parse_config_file = {
     version: config.version,
     config_source: config.config_source,
     remote_config_url: config.remote_config_url,
@@ -136,37 +132,23 @@ export default async function parseConfigFile(
         );
       }
 
-      // exists AND is array AND they all match discordIdRegex
-      if (
-        m.guild_allowlist &&
-        (!Array.isArray(m.guild_allowlist) ||
-          !m.guild_allowlist.every((gid) => discordIdRegex.test(gid)))
-      ) {
-        err("one or more guild ids in guild_allowlist is not valid", idx);
-      }
-
-      if (
-        m.guild_blocklist &&
-        (!Array.isArray(m.guild_blocklist) ||
-          !m.guild_blocklist.every((gid) => discordIdRegex.test(gid)))
-      ) {
-        // permit single "*"
-        if (
-          !(
-            Array.isArray(m.guild_blocklist) &&
-            m.guild_blocklist.length === 1 &&
-            m.guild_blocklist[0] === "*"
-          )
-        ) {
-          err("one or more guild ids in guild_blocklist is not valid", idx);
+      if (m.dependencies) {
+        const invalidDependency = m.dependencies.find(
+          (d) => !simpleDependencyRegex.test(d)
+        );
+        if (invalidDependency) {
+          err(`${invalidDependency} is not a valid dependency`, idx);
         }
-      }
 
-      if (
-        m.dependencies &&
-        !m.dependencies.every((d) => simpleDependencyRegex.test(d))
-      ) {
-        err("one or more of your dependencies is not valid", idx);
+        const invalidOmnibotDependency = omnibotDependenciesAreValid(
+          m.dependencies
+        );
+        if (invalidOmnibotDependency) {
+          err(
+            `${invalidOmnibotDependency} is not a valid omnibot dependency.`,
+            idx
+          );
+        }
       }
 
       // module is valid
@@ -175,9 +157,7 @@ export default async function parseConfigFile(
         id: m.id,
         name: m.name || m.id,
         source: m.source,
-        guild_blocklist: m.guild_blocklist,
-        guild_allowlist: m.guild_allowlist,
-        dependencies: new ModuleDependencyManager(m.id, m.dependencies),
+        dependencies: new ModuleDependencyManager(m.id, m.dependencies || []),
         config: m.config,
       };
 

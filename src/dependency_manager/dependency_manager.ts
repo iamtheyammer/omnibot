@@ -1,5 +1,4 @@
-import { access, writeFile } from "fs/promises";
-import { constants as fsConstants } from "fs";
+import { writeFile } from "fs/promises";
 import samplePackageJson from "./sample_package.json";
 import { normalize } from "path";
 import { install as installPackages } from "pkg-install";

@@ -1,0 +1,13 @@
+{
+  "name": "an-omnibot-installation",
+  "version": "1.0.0",
+  "description": "DO NOT REMOVE THIS FILE!!!!! It was automatically created by Omnibot because no package.json file existed in this folder.",
+  "main": "omnibot.bundle.js",
+  "scripts": {
+    "start": "node omnibot.bundle.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+}

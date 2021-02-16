@@ -1,9 +1,10 @@
-import { readFile } from "fs/promises";
+import { access, writeFile } from "fs/promises";
+import { constants as fsConstants } from "fs";
+import samplePackageJson from "./sample_package.json";
 import { normalize } from "path";
 import { install as installPackages } from "pkg-install";
 import Logger from "../logger";
 import { OmnibotModule } from "../config/parse_config_file";
-import * as Process from "process";
 
 interface ProcessedDependency {
   namespace: string;
@@ -234,39 +235,60 @@ export class DependencyManager {
 
     if (requiredPackages.length) {
       this.logger.debug("Resolving package (npm) dependencies");
-      this.logger.debug("Reading package.json file");
-      // check currently installed dependencies from package.json
-      const packageFileRaw = await readFile(
-        normalize("./package.json"),
-        "utf8"
-      );
-      const packageFile: {
-        // devDependencies: { [packageName: string]: string };
-        dependencies: { [packageName: string]: string };
-      } = JSON.parse(packageFileRaw);
-
-      // only count production dependencies
-      const installedPackages: string[] = Object.keys(packageFile.dependencies);
-
-      this.logger.debug(
-        `Found ${installedPackages.length} packages in package.json`
-      );
 
       const missingPackages = requiredPackages
         .map((d) => d.substring(4))
-        .filter((d) => !installedPackages.includes(d));
+        .filter((d) => {
+          try {
+            const modulePath = require.resolve(d);
+            this.logger.info(`Found ${d} at ${modulePath}`);
+            // false because we want to remove installed modules
+            return false;
+          } catch (e) {
+            if (e.code === "MODULE_NOT_FOUND") {
+              return true;
+            } else {
+              throw new DependencyResolutionError(
+                `Error resolving NPM module ${d}: ${e}`
+              );
+            }
+          }
+        });
 
       if (missingPackages.length) {
         this.logger.info(
           `Attempting to fetch these missing packages: ${missingPackages.join(
             ", "
-          )}`
+          )}. This may take a minute or two, so be patient!`
         );
 
+        // try to add the sample package.json file to the current directory.
+        // node will throw if it already exists. they recommend doing this
+        // instead of checking if the file exists then writing.
+        // https://nodejs.org/docs/latest-v14.x/api/fs.html#fs_fs_access_path_mode_callback
         try {
-          // install missingPackages
+          await writeFile(
+            normalize("./package.json"),
+            JSON.stringify(samplePackageJson, null, 2),
+            // use wx flag: throw if file exists
+            { flag: "wx" }
+          );
+          this.logger.info("Wrote sample package.json file");
+        } catch (e) {
+          if (e.code === "EEXIST") {
+            this.logger.debug("package.json file exists");
+          } else {
+            throw new DependencyResolutionError(
+              `Unable to write sample package.json file: ${e}`
+            );
+          }
+        }
+
+        try {
           const installationOutput = await installPackages(missingPackages);
-          this.logger.debug(installationOutput.stdout);
+          this.logger.debug(
+            `Output from package manager:\n${installationOutput.stdout}`
+          );
         } catch (e) {
           throw new DependencyResolutionError(
             `Error installing NPM dependencies: ${e}`

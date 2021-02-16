@@ -107,6 +107,7 @@ dist
 .pnp.js
 
 modules/
+remote_modules/
 
 omnibotconfig.json
 

@@ -1,9 +1,10 @@
 import chalk from "chalk";
-import { access } from "fs/promises";
-import { constants as fsConstants } from "fs";
 import { normalize } from "path";
+import { isEqual } from "lodash";
 import ModuleDependencyManager from "../dependency_manager/module_dependency_manager";
 import { omnibotDependenciesAreValid } from "../dependency_manager/omnibot_dependencies";
+import fetchRemoteModule, { RemoteModuleConfig } from "./fetch_remote_module";
+import Logger from "../logger";
 
 interface RawConfigFile {
   version: number;
@@ -19,7 +20,7 @@ interface RawOmnibotModule {
   source: {
     source: "local" | "remote";
     local_path?: string;
-    remote_url?: string;
+    url?: string;
   };
   dependencies: string[];
   config: any;
@@ -38,18 +39,13 @@ export interface OmnibotModule {
   name: string;
   source: {
     source: "local" | "remote";
-    local_path?: string;
-    remote_url?: string;
+    local_path: string;
+    url?: string;
   };
+  remoteModuleConfig?: RemoteModuleConfig;
   dependencies: ModuleDependencyManager;
   config: any;
 }
-
-// export interface OmnibotGuildConfig {
-//   id: string;
-//   permissions?: number;
-//   modules?: string[];
-// }
 
 class ConfigError extends Error {
   constructor(e: string) {
@@ -59,6 +55,8 @@ class ConfigError extends Error {
 }
 
 const simpleDependencyRegex = /^(omnibot|npm):.+$/;
+
+const logger = new Logger("config_parser");
 
 export default async function parseConfigFile(
   configFile: string
@@ -99,6 +97,17 @@ export default async function parseConfigFile(
     };
 
     for (const m of config.modules) {
+      const processedModule: OmnibotModule = {
+        id: m.id,
+        name: m.name || m.id,
+        source: {
+          source: "local",
+          local_path: "OPEN AN ISSUE IF YOU SEE THIS!!",
+        },
+        dependencies: new ModuleDependencyManager(m.id, m.dependencies || []),
+        config: m.config,
+      };
+
       let idx = config.modules.indexOf(m);
       if (!m.id) {
         err("No id specified", idx);
@@ -112,24 +121,79 @@ export default async function parseConfigFile(
         err("no source specified", idx);
       }
 
-      if (m.source.source !== "local") {
-        err("only local modules are currently supported", idx);
-      }
+      switch (m.source.source) {
+        case "local":
+          if (!m.source.local_path) {
+            err(`Missing source.local_path for source.source = "local"`, idx);
+            continue;
+          }
 
-      if (!m.source.local_path) {
-        err("no local path specified", idx);
-      }
+          try {
+            require.resolve(normalize(m.source.local_path));
+          } catch {
+            err(
+              `module (${m.source.local_path}) either does not exist or is not readable`,
+              idx
+            );
+          }
 
-      try {
-        await access(
-          normalize(m.source.local_path as string),
-          fsConstants.R_OK
-        );
-      } catch {
-        err(
-          `module (${m.source.local_path}) either does not exist or is not readable`,
-          idx
-        );
+          processedModule.source = {
+            source: "local",
+            local_path: m.source.local_path,
+          };
+          break;
+        case "remote":
+          // fetch module, check checksum
+          if (!m.source.url) {
+            err(`Missing source.url for source.source = "local"`, idx);
+            continue;
+          }
+
+          logger.info(`Fetching remote module ${m.id} from ${m.source.url}...`);
+          const { remoteModuleConfig, codePath } = await fetchRemoteModule(
+            m.source.url,
+            logger.createChildLogger("fetch_remote_module")
+          );
+
+          logger.info(`Successfully fetched module ${m.id}!`);
+
+          if (
+            remoteModuleConfig.dependencies &&
+            !isEqual(m.dependencies, remoteModuleConfig.dependencies)
+          ) {
+            logger.warn(
+              `Dependencies in remote module config for ${
+                m.id
+              } are different than dependencies specified in config file.
+Using config file dependencies.
+
+Dependencies specified in remote config file: ${remoteModuleConfig.dependencies.join(
+                ", "
+              )}`
+            );
+          } else if (!m.dependencies) {
+            logger.info(
+              `${
+                m.id
+              } has no dependencies specified in the config file, using dependencies from remote module configuration: ${remoteModuleConfig.dependencies.join(
+                ", "
+              )}`
+            );
+            processedModule.dependencies = new ModuleDependencyManager(
+              m.id,
+              remoteModuleConfig.dependencies
+            );
+          }
+
+          processedModule.source = {
+            source: "remote",
+            local_path: codePath,
+            url: m.source.url,
+          };
+          processedModule.remoteModuleConfig = remoteModuleConfig;
+          break;
+        default:
+          err("invalid module source", idx);
       }
 
       if (m.dependencies) {
@@ -152,15 +216,6 @@ export default async function parseConfigFile(
       }
 
       // module is valid
-
-      const processedModule: OmnibotModule = {
-        id: m.id,
-        name: m.name || m.id,
-        source: m.source,
-        dependencies: new ModuleDependencyManager(m.id, m.dependencies || []),
-        config: m.config,
-      };
-
       idSet.add(m.id);
       finalConfig.modules.push(processedModule);
     }

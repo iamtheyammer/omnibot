@@ -43,9 +43,9 @@ jobs:
           SHA256 checksum of the omnibot.bundle.js: ${{ env.SHASUM }}
     
     - name: Upload release asset
-      uses: actions/create-release@v1
+      uses: actions/upload-release-asset@v1
       env:
-        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
         asset_path: ./dist/omnibot.bundle.js

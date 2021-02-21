@@ -42,10 +42,10 @@ THAT MEANS:
 
 If you did not follow these very clear instructions, please delete ALL files in this folder. (EVERYTHING!)`;
 
-export default async function fetchRemoteModule(
+export async function fetchRemoteModuleConfigFile(
   configUrl: string,
-  logger: Logger
-): Promise<{ remoteModuleConfig: RemoteModuleConfig; codePath: string }> {
+  logger = new Logger("fetch_remote_module_config_file")
+): Promise<RemoteModuleConfig> {
   if (
     !configUrl.startsWith("https://") &&
     !configUrl.startsWith("http://localhost")
@@ -124,6 +124,15 @@ Full remote config recieved: ${JSON.stringify(config)}`
     );
   }
 
+  return config;
+}
+
+export default async function fetchRemoteModule(
+  configUrl: string,
+  logger: Logger
+): Promise<{ remoteModuleConfig: RemoteModuleConfig; codePath: string }> {
+  const config = await fetchRemoteModuleConfigFile(configUrl);
+
   // fetch module code
   logger.info("Fetching remote module code...");
   const moduleCodeReq = await axios({
@@ -135,9 +144,9 @@ Full remote config recieved: ${JSON.stringify(config)}`
   });
 
   if (
-    !configReq.headers["content-type"] &&
-    (configReq.headers["content-type"] === "text/javascript" ||
-      configReq.headers["content-type"] === "application/javascript")
+    !moduleCodeReq.headers["content-type"] &&
+    (moduleCodeReq.headers["content-type"] === "text/javascript" ||
+      moduleCodeReq.headers["content-type"] === "application/javascript")
   ) {
     logger.warn(
       `The Content-Type header from the remote module's code was NOT text/javascript or application/javascript.`

@@ -13,6 +13,13 @@ interface ManagedModule extends OmnibotModule {
 
 const logger = new Logger("module_manager");
 
+class ModuleAlreadyLoadedError extends Error {
+  constructor(e: string) {
+    super(e);
+    this.name = "ModuleAlreadyLoadedError";
+  }
+}
+
 export default class ModuleManager {
   private readonly discordClient: Client;
   private loadedModules: ManagedModule[] = [];
@@ -26,6 +33,14 @@ export default class ModuleManager {
 
   async loadModule(module: OmnibotModule) {
     logger.info(`Loading module ${module.id}...`);
+
+    if (this.loadedModules.some((m) => m.id === module.id)) {
+      logger.error(`Module with ID ${module.id} is already loaded!`);
+      throw new ModuleAlreadyLoadedError(
+        `The module with ID ${module.id} is already loaded!`
+      );
+    }
+
     const managedModule = module as ManagedModule;
 
     // load file
@@ -84,11 +99,28 @@ export default class ModuleManager {
 
   async unloadModule(moduleId: string) {
     const module = this.loadedModules.find((m) => m.id === moduleId);
-    if (module) {
-      await module.coreDependency.unload();
-      this.loadedModules.filter((m) => m.id !== moduleId);
-      this.updateStatus();
+    if (!module) {
+      return;
     }
+
+    await module.coreDependency.unload();
+
+    // remove from node dependency cache
+    // if we don't do this and reload the module
+    // the code won't be reloaded
+    if (module.normalizedPath) {
+      logger.debug(
+        `Removing ${module.normalizedPath} from the nodejs require cache`
+      );
+      delete require.cache[module.normalizedPath];
+    }
+
+    this.loadedModules = this.loadedModules.filter((m) => m.id !== moduleId);
+    this.updateStatus();
+  }
+
+  public getLoadedModules(): OmnibotModule[] {
+    return this.loadedModules;
   }
 
   private updateStatus() {

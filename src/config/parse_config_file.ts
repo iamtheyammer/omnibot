@@ -9,8 +9,11 @@ import { Client, TextChannel } from "discord.js";
 
 interface RawConfigFile {
   version: number;
-  logging: {
+  logging?: {
     destination: ("console" | "discord")[];
+    discord_channel_id?: string;
+  };
+  dcli?: {
     discord_channel_id?: string;
   };
   config_source: "current_file" | "remote";
@@ -38,6 +41,10 @@ export interface Config {
     destination: ("console" | "discord")[];
     discord_channel?: TextChannel;
     discord_channel_id?: string;
+  };
+  dcli: {
+    discord_channel_id?: string;
+    discord_channel?: TextChannel;
   };
   remote_config_url?: string;
   discord_token: string;
@@ -93,7 +100,8 @@ export default async function parseConfigFile(
   const finalConfig: Config = {
     version: config.version,
     config_source: config.config_source,
-    logging: config.logging,
+    logging: config.logging || { destination: ["console"] },
+    dcli: config.dcli || {},
     remote_config_url: config.remote_config_url,
     discord_token: config.discord_token,
     modules: [],

@@ -6,15 +6,16 @@ import Logger, { pushLogsToDiscord } from "./logger";
 import ModuleManager from "./module_manager/module_manager";
 import { DependencyManager } from "./dependency_manager/dependency_manager";
 import { TextChannel } from "discord.js";
+import dcliListener from "./dcli";
 
-let config: Config;
+export let config: Config;
 const logger = new Logger("core");
 
 const client = new Discord.Client();
 // initialize
 
-const dependencyManager = new DependencyManager();
-const moduleManager = new ModuleManager(client, dependencyManager);
+export const dependencyManager = new DependencyManager();
+export const moduleManager = new ModuleManager(client, dependencyManager);
 
 client.on("ready", async () => {
   logger.success("Connected to Discord!");
@@ -134,6 +135,35 @@ async function init() {
     logger.info("Configured logging to Discord!");
     config.logging.discord_channel = channel;
     pushLogsToDiscord(config.logging.discord_channel);
+  }
+
+  if (config.dcli) {
+    if (!config.dcli.discord_channel_id) {
+      logger.fatal("No discord_channel_id specified for dcli");
+      process.exit(1);
+    }
+
+    const channel: TextChannel = (await client.channels.fetch(
+      config.dcli.discord_channel_id
+    )) as TextChannel;
+
+    if (!(channel instanceof TextChannel)) {
+      logger.fatal(`DCLI discord_channel_id specified is not a text channel.`);
+      process.exit(1);
+    }
+
+    if (!channel.manageable) {
+      logger.fatal(
+        "The bot doesn't have access to manage the DCLI discord channel."
+      );
+      process.exit(1);
+    }
+
+    client.on(
+      "message",
+      (msg) =>
+        msg.channel.id === config.dcli.discord_channel_id && dcliListener(msg)
+    );
   }
 
   await loadModules();

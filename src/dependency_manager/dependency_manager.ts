@@ -48,6 +48,11 @@ export class DependencyManager {
     // create required resolution
     // wait for resolveModules call
 
+    if (this.dependencyTree[moduleId]) {
+      this.logger.info("Module is already in tree, skipping");
+      return;
+    }
+
     const deps = rawDeps.map((d) => DependencyManager.parseDependency(d));
     // first, handle all NPM dependencies
     const npmDeps = deps.filter((d) => d.namespace === "npm");

@@ -3,9 +3,10 @@ import { normalize, resolve } from "path";
 import { isEqual } from "lodash";
 import ModuleDependencyManager from "../dependency_manager/module_dependency_manager";
 import { omnibotDependenciesAreValid } from "../dependency_manager/omnibot_dependencies";
-import fetchRemoteModule, { RemoteModuleConfig } from "./fetch_remote_module";
+import fetchRemoteModule from "./fetch_remote_module";
 import Logger from "../logger";
-import { Client, TextChannel } from "discord.js";
+import { TextChannel } from "discord.js";
+import { OmnibotModule } from "../redux/types/config";
 
 interface RawConfigFile {
   version: number;
@@ -49,19 +50,6 @@ export interface Config {
   remote_config_url?: string;
   discord_token: string;
   modules: OmnibotModule[];
-}
-
-export interface OmnibotModule {
-  id: string;
-  name: string;
-  source: {
-    source: "local" | "remote";
-    local_path: string;
-    url?: string;
-  };
-  remoteModuleConfig?: RemoteModuleConfig;
-  dependencies: ModuleDependencyManager;
-  config: any;
 }
 
 class ConfigError extends Error {
@@ -127,7 +115,7 @@ export default async function parseConfigFile(
         config: m.config,
       };
 
-      let idx = config.modules.indexOf(m);
+      const idx = config.modules.indexOf(m);
       if (!m.id) {
         err("No id specified", idx);
       }
@@ -163,7 +151,7 @@ export default async function parseConfigFile(
             local_path: m.source.local_path,
           };
           break;
-        case "remote":
+        case "remote": {
           // fetch module, check checksum
           if (!m.source.url) {
             err(`Missing source.url for source.source = "local"`, idx);
@@ -213,6 +201,7 @@ Dependencies specified in remote config file: ${remoteModuleConfig.dependencies.
           };
           processedModule.remoteModuleConfig = remoteModuleConfig;
           break;
+        }
         default:
           err("invalid module source", idx);
       }

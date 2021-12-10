@@ -1,15 +1,18 @@
-import { Client } from "discord.js";
 import { normalize, resolve } from "path";
-import { OmnibotModule } from "../config/parse_config_file";
 import CoreDependency from "../core_dependency";
 import Logger from "../logger";
+import { OmnibotModule } from "../redux/types/config";
+import { ChangeMap, connect, Module } from "newton-redux-reborn";
+import State from "../redux/types";
+import { Dispatch } from "redux";
+import { ManagedModule } from "../redux/types/modules";
+import {
+  addLoadedModule,
+  addModuleExports,
+  unloadModule,
+} from "../redux/actions/modules";
 import { DependencyManager } from "../dependency_manager/dependency_manager";
-
-interface ManagedModule extends OmnibotModule {
-  coreDependency: CoreDependency;
-  normalizedPath?: string;
-  importedCode: any;
-}
+import { client as discordClient } from "../index";
 
 const logger = new Logger("module_manager");
 
@@ -20,21 +23,59 @@ class ModuleAlreadyLoadedError extends Error {
   }
 }
 
-export default class ModuleManager {
-  private readonly discordClient: Client;
-  private loadedModules: ManagedModule[] = [];
-  private depedencyManager: DependencyManager;
-  private moduleExports: { [moduleId: string]: any } = {};
-
-  constructor(client: Client, dependencyManager: DependencyManager) {
-    this.discordClient = client;
-    this.depedencyManager = dependencyManager;
+class ModuleManager extends Module<ModuleManagerProps> {
+  constructor(props: ModuleManagerProps) {
+    super(props);
   }
 
-  async loadModule(module: OmnibotModule) {
+  async onChange(changeMap: ChangeMap) {
+    // load modules when their dependencies are satisfied
+    if (changeMap.satisfiedModuleIds.hasChanged) {
+      const previouslySatisfiedModuleIds = new Set(
+        changeMap.satisfiedModuleIds.previousValue
+      );
+      const newlySatisfiedModuleIds = new Set(
+        this.props.satisfiedModuleIds.filter(
+          (mId) => !previouslySatisfiedModuleIds.has(mId)
+        )
+      );
+
+      // determine order
+      const allLoadOrder = DependencyManager.getModuleLoadOrder(
+        this.props.dependencyTree
+      );
+      const filteredLoadOrder = allLoadOrder.filter((mId) =>
+        newlySatisfiedModuleIds.has(mId)
+      );
+
+      logger.info(
+        `Loading ${
+          newlySatisfiedModuleIds.size
+        } modules because their dependencies were just satisfied: ${filteredLoadOrder.join(
+          ", "
+        )}`
+      );
+
+      for (const mId of filteredLoadOrder) {
+        const module = this.props.modules.find((m) => m.id === mId);
+        if (!module) {
+          logger.error(
+            `Module id ${mId} just had its dependencies satisfied but is not available in config.modules!`
+          );
+          continue;
+        }
+
+        await this.loadModule(module);
+      }
+    }
+  }
+
+  private async loadModule(module: OmnibotModule) {
     logger.info(`Loading module ${module.id}...`);
 
-    if (this.loadedModules.some((m) => m.id === module.id)) {
+    if (
+      Object.keys(this.props.loadedModules).some((mId) => mId === module.id)
+    ) {
       logger.error(`Module with ID ${module.id} is already loaded!`);
       throw new ModuleAlreadyLoadedError(
         `The module with ID ${module.id} is already loaded!`
@@ -46,13 +87,14 @@ export default class ModuleManager {
     // load file
     const normalizedPath = resolve(normalize(module.source.local_path));
 
-    const moduleDependencies = this.depedencyManager.getModuleDependenciesForModule(
+    const moduleDependencies = DependencyManager.getModuleDependenciesForModule(
+      this.props.dependencyTree,
       module.id
     );
     const moduleDependencyInjection: { [moduleId: string]: any } = {};
 
-    moduleDependencies.forEach((mDep) => {
-      const depExport = this.moduleExports[mDep];
+    moduleDependencies.forEach((mDep: string) => {
+      const depExport = this.props.moduleExports[mDep];
 
       if (!depExport) {
         logger.error(`${module.id} depends on ${mDep}, but its exports aren't available!
@@ -71,24 +113,30 @@ export default class ModuleManager {
       const importedModule = await import(normalizedPath);
       managedModule.coreDependency = new CoreDependency(
         module,
-        this.discordClient,
+        discordClient,
         moduleDependencyInjection
       );
       managedModule.importedCode = importedModule;
       managedModule.normalizedPath = normalizedPath;
       importedModule.init(managedModule.coreDependency);
-      if (this.depedencyManager.moduleHasModuleDependents(module.id)) {
+      if (
+        DependencyManager.moduleHasModuleDependents(
+          this.props.dependencyTree,
+          module.id
+        )
+      ) {
         // we need to call omnibotExports
         logger.debug(`${module.id} has dependents, caching exports`);
-        this.moduleExports[module.id] = importedModule.omnibotExports;
-        if (!this.moduleExports[module.id]) {
+        if (!importedModule.omnibotExports) {
           logger.error(`Nothing was exported from ${module.id}`);
+        } else {
+          this.props.addModuleExports(module.id, importedModule.omnibotExports);
         }
       } else {
         logger.debug(`${module.id} does not have module dependents`);
       }
-      this.loadedModules.push(managedModule);
-      this.updateStatus();
+
+      this.props.addModule(managedModule);
     } catch (e) {
       logger.error(`Error loading module ${module.id}: ${e}.`);
       throw e;
@@ -97,8 +145,10 @@ export default class ModuleManager {
     logger.info(`Successfully loaded module ${module.id}!`);
   }
 
-  async unloadModule(moduleId: string) {
-    const module = this.loadedModules.find((m) => m.id === moduleId);
+  private async unloadModule(moduleId: string) {
+    logger.info(`Unloading module ${moduleId}...`);
+
+    const module = this.props.loadedModules[moduleId];
     if (!module) {
       return;
     }
@@ -115,23 +165,50 @@ export default class ModuleManager {
       delete require.cache[module.normalizedPath];
     }
 
-    this.loadedModules = this.loadedModules.filter((m) => m.id !== moduleId);
-    this.updateStatus();
-  }
+    // TODO: tell dependent modules about the unload
 
-  public getLoadedModules(): OmnibotModule[] {
-    return this.loadedModules;
-  }
-
-  private updateStatus() {
-    logger.debug(
-      `Updating status to show ${this.loadedModules.length} modules`
-    );
-    if (this.discordClient.user) {
-      this.discordClient.user.setActivity(
-        `with ${this.loadedModules.length} modules`,
-        { type: "PLAYING" }
-      );
-    }
+    logger.info(`Unloaded module ${moduleId}.`);
   }
 }
+
+interface ModuleManagerStateProps {
+  dependencyTree: State["dependencies"]["dependency_tree"];
+  satisfiedModuleIds: State["dependencies"]["satisfied_module_ids"];
+  loadedModules: State["modules"]["loaded_modules"];
+  moduleExports: State["modules"]["module_exports"];
+  modules: State["config"]["modules"];
+}
+
+function mapStateToProps(state: State): ModuleManagerStateProps {
+  return {
+    dependencyTree: state.dependencies.dependency_tree,
+    satisfiedModuleIds: state.dependencies.satisfied_module_ids,
+    loadedModules: state.modules.loaded_modules,
+    moduleExports: state.modules.module_exports,
+    modules: state.config.modules,
+  };
+}
+
+interface ModuleManagerDispatchProps {
+  addModule: typeof addLoadedModule;
+  addModuleExports: typeof addModuleExports;
+  unloadModule: typeof unloadModule;
+}
+
+function mapDispatchToProps(dispatch: Dispatch): ModuleManagerDispatchProps {
+  return {
+    addModule: (module: ManagedModule) => dispatch(addLoadedModule(module)),
+    addModuleExports: (moduleId, exports) =>
+      dispatch(addModuleExports(moduleId, exports)),
+    unloadModule: (moduleId) => dispatch(unloadModule(moduleId)),
+  };
+}
+
+type ModuleManagerProps = ModuleManagerStateProps & ModuleManagerDispatchProps;
+
+const ConnectedModuleManager = connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(ModuleManager);
+
+export default ConnectedModuleManager;

@@ -1,7 +1,7 @@
 import { Client } from "discord.js";
 import { timeout, TimeoutError } from "promise-timeout";
-import { OmnibotModule } from "../config/parse_config_file";
 import Logger from "../logger";
+import { OmnibotModule } from "../redux/types/config";
 
 interface Listeners {
   [namespace: string]: {
@@ -15,7 +15,7 @@ interface ModuleInterdependencies {
 
 export default class CoreDependency {
   private readonly module: OmnibotModule;
-  private readonly client: Client;
+  private client: Client;
   public readonly logger;
   private readonly internalLogger;
   private listeners: Listeners = {};
@@ -94,7 +94,7 @@ export default class CoreDependency {
       !this.module.dependencies.hasDependency("omnibot:core")
     ) {
       throw new DependencyNotAvailableError(
-        `In order to recieve Discord events, the omnibot:core dependency is required.`
+        `In order to receive Discord events, the omnibot:core dependency is required.`
       );
     }
 
@@ -104,7 +104,6 @@ export default class CoreDependency {
 
     switch (eventNamespace) {
       case "discord":
-        // pass callback to discord, save
         this.client.on(eventName, callback);
         this.addListener(eventNamespace, eventName, callback);
         break;
@@ -113,16 +112,5 @@ export default class CoreDependency {
         break;
     }
   }
-
-  public getClient(): Client {
-    if (this.module.dependencies.hasDependency("omnibot:discordclient")) {
-      return this.client;
-    } else {
-      throw new DependencyNotAvailableError(
-        "Insufficient permissions: omnibot:discordclient must be in this module's dependency list."
-      );
-    }
-  }
 }
-
 class DependencyNotAvailableError extends Error {}

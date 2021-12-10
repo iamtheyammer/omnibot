@@ -91,7 +91,7 @@ export async function fetchRemoteModuleConfigFile(
   if (config.schema_version !== 1) {
     throw new InvalidRemoteModuleConfigurationError(
       `Invalid schema version: got ${config.schema_version}, expected 1
-Full remote config recieved: ${JSON.stringify(config)}`
+Full remote config received: ${JSON.stringify(config)}`
     );
   }
 

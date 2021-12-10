@@ -116,3 +116,5 @@ dist/
 omnibotconfig.json
 
 .DS_Store
+
+.idea/

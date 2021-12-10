@@ -3,7 +3,19 @@ import samplePackageJson from "./sample_package.json";
 import { normalize } from "path";
 import { install as installPackages } from "pkg-install";
 import Logger from "../logger";
-import { OmnibotModule } from "../config/parse_config_file";
+import { OmnibotModule } from "../redux/types/config";
+import { ChangeMap, connect, Module } from "newton-redux-reborn";
+import State from "../redux/types";
+import { Dispatch } from "redux";
+import {
+  addDependencyToTree,
+  addDependentToModule,
+  setSatisfiedModuleIds,
+} from "../redux/actions/dependencies";
+import {
+  DependencyTree,
+  DependencyTreeEntry,
+} from "../redux/types/dependencies";
 
 interface ProcessedDependency {
   namespace: string;
@@ -12,44 +24,54 @@ interface ProcessedDependency {
   identifier: string;
 }
 
-export class DependencyManager {
-  private readonly dependencyTree: {
-    [moduleId: string]: { dependsOn: string[]; dependencies: string[] };
-  } = {};
-  private readonly logger = new Logger("dependency_manager");
-  private readonly modules: OmnibotModule[];
+const depMgrRootLogger = new Logger("dependency_manager");
 
-  constructor(modules?: OmnibotModule[]) {
-    if (modules) {
-      modules.forEach((m) =>
-        this.addModule(
-          m,
-          modules.map((mo) => mo.id)
-        )
+export class DependencyManager extends Module<DependencyManagerProps> {
+  async onChange(changeMap: ChangeMap) {
+    const logger = depMgrRootLogger.createChildLogger("onChange");
+
+    // when modules change, determine change and add them
+    if (changeMap.modules.hasChanged) {
+      const prevModules = changeMap.modules.previousValue as OmnibotModule[];
+
+      const newModules = this.props.modules.filter(
+        (m) => !prevModules.some((pm) => pm.id === m.id)
       );
+      logger.debug(
+        `Detected ${newModules.length} new modules with ids ${newModules
+          .map((m) => m.id)
+          .join(", ")}, adding them`
+      );
+
+      newModules.forEach((m) => this.addModule(m));
     }
 
-    this.modules = modules || [];
+    // when the dependency tree changes, resolve dependencies
+    if (changeMap.dependencyTree.hasChanged) {
+      await this.resolveDependencies();
+    }
   }
 
   /**
    * addModule adds a module's dependencies to the dependency tree.
+   * It reacts to changes in the state tree.
    *
    * It does not resolve the dependencies-- make sure to call resolveDependencies before
    * loading modules!
    * @param module The module to add to the dependency tree
-   * @param allModuleIds Array of all module IDs. Used to check for invalid module interdependencies
    */
-  public addModule(module: OmnibotModule, allModuleIds: string[]) {
+  private addModule(module: OmnibotModule) {
+    const logger = depMgrRootLogger.createChildLogger("addModule");
+
     const { id: moduleId } = module;
     const rawDeps = Array.from(module.dependencies.dependencies);
-    this.logger.info(`Adding dependencies for module ${moduleId}`);
+    logger.info(`Adding dependencies for module ${moduleId}`);
     // add dependencies to tree
     // create required resolution
     // wait for resolveModules call
 
-    if (this.dependencyTree[moduleId]) {
-      this.logger.info("Module is already in tree, skipping");
+    if (this.props.dependencyTree[moduleId]) {
+      logger.info("Module is already in tree, skipping");
       return;
     }
 
@@ -57,13 +79,13 @@ export class DependencyManager {
     // first, handle all NPM dependencies
     const npmDeps = deps.filter((d) => d.namespace === "npm");
     if (npmDeps.length) {
-      this.logger.debug(
+      logger.debug(
         `Added these NPM dependencies for module ${moduleId}: ${npmDeps
           .map((d) => d.dependency)
           .join(", ")}.`
       );
     } else {
-      this.logger.debug(`No NPM dependencies found for module ${moduleId}`);
+      logger.debug(`No NPM dependencies found for module ${moduleId}`);
     }
 
     // inter-module dependencies
@@ -72,7 +94,7 @@ export class DependencyManager {
     );
 
     if (!imDeps.length) {
-      this.logger.debug(
+      logger.debug(
         `Module ${moduleId} does not declare any intermodule dependencies.`
       );
     } else {
@@ -84,57 +106,50 @@ export class DependencyManager {
             d.dependencySplit[1] === moduleId
         )
       ) {
-        throw new DependencyResolutionError(
-          `Module ${moduleId} depends on itself!`
-        );
+        logger.fatal(`Module ${moduleId} depends on itself!`);
+        return;
       }
     }
 
-    // create tree node if it doesn't exist
-    if (!this.dependencyTree[moduleId]) {
-      this.dependencyTree[moduleId] = {
-        dependsOn: [],
-        dependencies: [],
-      };
-    }
+    const depTreeNode: DependencyTreeEntry = {
+      dependencies: [],
+      dependents: [],
+    };
 
     // add dependencies to tree
 
-    // add npm dependencies. only add dependsOn
+    // add npm dependencies. only add dependencies
     for (const d of npmDeps) {
       // add only dependencies
-      this.dependencyTree[moduleId].dependsOn.push(d.identifier);
+      depTreeNode.dependencies.push(d.identifier);
     }
 
     for (const d of imDeps) {
-      if (!allModuleIds.includes(d.dependencySplit[1])) {
-        throw new DependencyResolutionError(
+      if (!this.props.modules.some((m) => m.id === d.dependencySplit[1])) {
+        logger.fatal(
           `Unable to find module ${d.dependencySplit[1]} which is a dependency of ${module.id}!`
         );
+        return;
       }
 
-      // add dependency to this module
+      // add the IMD as a dependency to this module
       const imDep = d.dependencySplit[1];
-      this.dependencyTree[moduleId].dependsOn.push(d.identifier);
+      depTreeNode.dependencies.push(d.identifier);
 
-      // add dependent to dependent module
-      if (!this.dependencyTree[imDep]) {
-        this.dependencyTree[imDep] = {
-          dependsOn: [],
-          dependencies: [`omnibot:module:${moduleId}`],
-        };
-      } else {
-        this.dependencyTree[imDep].dependencies.push(
-          `omnibot:module:${moduleId}`
-        );
-        this.recursivelyCheckCyclicalDependencies(moduleId, new Set([imDep]));
-      }
+      // add this module as a dependent to IMD
+      this.props.addDependentToModule(imDep, `omnibot:module:${moduleId}`);
+      this.recursivelyCheckCyclicalDependencies(moduleId, new Set([imDep]));
     }
 
-    this.modules.push(module);
-    this.logger.debug(
+    this.props.addDependency(
+      moduleId,
+      depTreeNode.dependencies,
+      depTreeNode.dependents
+    );
+
+    logger.debug(
       `Dependency tree for module ${moduleId}:\n${JSON.stringify(
-        this.dependencyTree[moduleId],
+        this.props.dependencyTree[moduleId],
         null,
         2
       )}`
@@ -145,7 +160,11 @@ export class DependencyManager {
     moduleId: string,
     moduleIds: Set<string>
   ) {
-    this.logger.debug(
+    const logger = depMgrRootLogger.createChildLogger(
+      "recursivelyCheckCyclicalDependencies"
+    );
+
+    logger.debug(
       `Recursively parsing module dependencies for ${Array.from(moduleIds)}`
     );
 
@@ -153,20 +172,22 @@ export class DependencyManager {
       const checkForImdModuleId = DependencyManager.isIntermoduleDependency(m)
         ? DependencyManager.parseDependency(m).dependencySplit[1]
         : m;
-      if (!this.dependencyTree[checkForImdModuleId]) {
-        this.logger.warn(
+      if (!this.props.dependencyTree[checkForImdModuleId]) {
+        logger.warn(
           `${m} is not in the tree yet, can't check for IMDs. This may cause dependency issues in the future.`
         );
         continue;
       }
 
-      const imDepImds = this.dependencyTree[checkForImdModuleId].dependsOn
+      const imDepImds = this.props.dependencyTree[
+        checkForImdModuleId
+      ].dependencies
         .filter((dep) => DependencyManager.isIntermoduleDependency(dep))
         .map(
           (dep) => DependencyManager.parseDependency(dep).dependencySplit[1]
         );
       if (imDepImds.length) {
-        this.logger.debug(
+        logger.debug(
           `${m} depends on ${imDepImds}, checking for a dependency cycle`
         );
         imDepImds.forEach((imd) => {
@@ -178,7 +199,7 @@ export class DependencyManager {
         });
         this.recursivelyCheckCyclicalDependencies(moduleId, new Set(imDepImds));
       } else {
-        this.logger.debug(`No cyclical dependencies found in ${moduleId}!`);
+        logger.debug(`No cyclical dependencies found in ${moduleId}!`);
       }
     }
   }
@@ -189,31 +210,39 @@ export class DependencyManager {
    * It resolves both Omnibot Module Dependencies (called module interdependencies)
    * and NPM dependencies.
    */
-  public async resolveDependencies() {
-    this.logger.info("Resolving dependencies");
-    this.logger.debug(
-      `Full dependency tree:\n${JSON.stringify(this.dependencyTree, null, 2)}`
+  private async resolveDependencies() {
+    const logger = depMgrRootLogger.createChildLogger("resolveDependencies");
+    logger.info("Resolving dependencies");
+    logger.debug(
+      `Full dependency tree:\n${JSON.stringify(
+        this.props.dependencyTree,
+        null,
+        2
+      )}`
     );
+
+    const modulesToResolve = Object.keys(this.props.dependencyTree);
 
     const resolutionQueueSet: Set<string> = new Set();
 
     // run through each module
-    Object.entries(this.dependencyTree).forEach(([, deps]) => {
+    modulesToResolve.forEach((moduleId) => {
+      const deps = this.props.dependencyTree[moduleId];
+
       deps.dependencies.forEach((d) => {
-        this.logger.debug(`Adding ${d} to the resolution queue (dependencies)`);
+        logger.debug(`Adding ${d} to the resolution queue (dependents)`);
         resolutionQueueSet.add(d);
       });
-      deps.dependsOn.forEach((d) => {
-        this.logger.debug(`Adding ${d} to the resolution queue (dependsOn)`);
+      deps.dependencies.forEach((d) => {
+        logger.debug(`Adding ${d} to the resolution queue (dependencies)`);
         resolutionQueueSet.add(d);
       });
     });
-
     const resolutionQueue = Array.from(resolutionQueueSet);
-    this.logger.info(`Resolving these modules: ${resolutionQueue.join(", ")}`);
+    logger.info(`Resolving these modules: ${resolutionQueue.join(", ")}`);
 
     // first, resolve Omnibot dependencies
-    this.logger.debug(`Resolving Omnibot dependencies (checking for presence)`);
+    logger.debug(`Resolving Omnibot dependencies (checking for presence)`);
     const omnibotDependencies = resolutionQueue
       .filter((d) => d.startsWith("omnibot:module:"))
       .map((d) => d.substring(15));
@@ -221,16 +250,16 @@ export class DependencyManager {
     // ensure that all dependencies appear in the tree.
     if (omnibotDependencies.length) {
       omnibotDependencies.forEach((d) => {
-        if (!this.dependencyTree[d]) {
+        if (!this.props.dependencyTree[d]) {
           throw new DependencyResolutionError(
             `Unable to resolve omnibot module dependency ${d}! (omnibot:module:${d})`
           );
         }
       });
-      this.logger.debug("All omnibot module dependencies resolved!");
+      logger.debug("All omnibot module dependencies resolved!");
       // all omnibot modules validated.
     } else {
-      this.logger.debug("No omnibot module dependencies to resolve");
+      logger.debug("No omnibot module dependencies to resolve");
     }
 
     const requiredPackages = resolutionQueue
@@ -238,14 +267,14 @@ export class DependencyManager {
       .map((d) => d.substring(d.indexOf("npm:" + 1)));
 
     if (requiredPackages.length) {
-      this.logger.debug("Resolving package (npm) dependencies");
+      logger.debug("Resolving package (npm) dependencies");
 
       const missingPackages = requiredPackages
         .map((d) => d.substring(4))
         .filter((d) => {
           try {
             const modulePath = require.resolve(d);
-            this.logger.info(`Found ${d} at ${modulePath}`);
+            logger.info(`Found ${d} at ${modulePath}`);
             // false because we want to remove installed modules
             return false;
           } catch (e) {
@@ -260,7 +289,7 @@ export class DependencyManager {
         });
 
       if (missingPackages.length) {
-        this.logger.info(
+        logger.info(
           `Attempting to fetch these missing packages: ${missingPackages.join(
             ", "
           )}. This may take a minute or two, so be patient!`
@@ -277,10 +306,10 @@ export class DependencyManager {
             // use wx flag: throw if file exists
             { flag: "wx" }
           );
-          this.logger.info("Wrote sample package.json file");
+          logger.info("Wrote sample package.json file");
         } catch (e) {
           if (e.code === "EEXIST") {
-            this.logger.debug("package.json file exists");
+            logger.debug("package.json file exists");
           } else {
             throw new DependencyResolutionError(
               `Unable to write sample package.json file: ${e}`
@@ -290,7 +319,7 @@ export class DependencyManager {
 
         try {
           const installationOutput = await installPackages(missingPackages);
-          this.logger.debug(
+          logger.debug(
             `Output from package manager:\n${installationOutput.stdout}`
           );
         } catch (e) {
@@ -299,36 +328,39 @@ export class DependencyManager {
           );
         }
 
-        this.logger.success(
+        logger.success(
           `Installed these dependencies: ${missingPackages.join(", ")}!`
         );
       } else {
-        this.logger.info("No missing NPM dependencies to install!");
+        logger.info("No missing NPM dependencies to install!");
       }
     } else {
-      this.logger.info("No NPM dependencies to resolve");
+      logger.info("No NPM dependencies to resolve");
     }
 
-    this.logger.success("Resolved module dependencies successfully!");
+    this.props.setSatisfiedModuleIds(modulesToResolve);
+    logger.success("Resolved module dependencies successfully!");
   }
 
-  public getModuleLoadOrder(): OmnibotModule[] {
+  public static getModuleLoadOrder(dependencyTree: DependencyTree): string[] {
+    const logger = depMgrRootLogger.createChildLogger("getModuleLoadOrder");
+
     const loadOrder: Set<string> = new Set();
 
-    let pendingModules = [...this.modules];
+    let pendingModules = Object.entries(dependencyTree);
     // load modules without dependencies first.
-    pendingModules.forEach((m) => {
+    pendingModules.forEach(([moduleId, treeEntry]) => {
       if (
-        !Array.from(m.dependencies.dependencies).some((d) =>
+        !Array.from(treeEntry.dependencies).some((d) =>
           DependencyManager.isIntermoduleDependency(d)
         )
       ) {
         // module has zero intermodule dependencies
-        loadOrder.add(m.id);
+        loadOrder.add(moduleId);
       }
     });
 
-    this.logger.debug(
+    logger.debug(
       `Identified ${
         loadOrder.size
       } modules without intermodule dependencies, loading them first: ${Array.from(
@@ -338,7 +370,9 @@ export class DependencyManager {
 
     // remove loaded modules from pendingModules
     const pruneLoadedModules = () => {
-      pendingModules = pendingModules.filter((m) => !loadOrder.has(m.id));
+      pendingModules = pendingModules.filter(
+        ([moduleId]) => !loadOrder.has(moduleId)
+      );
     };
 
     pruneLoadedModules();
@@ -347,9 +381,9 @@ export class DependencyManager {
     while (pendingModules.length > 0) {
       // load any modules that depend on currently loaded modules
 
-      pendingModules.forEach((m) => {
+      pendingModules.forEach(([moduleId, treeEntry]) => {
         const deps: ProcessedDependency[] = Array.from(
-          m.dependencies.dependencies
+          treeEntry.dependencies
         ).map((d) => DependencyManager.parseDependency(d));
         const imDeps: ProcessedDependency[] = deps.filter((d) =>
           DependencyManager.isIntermoduleDependency(d)
@@ -360,54 +394,57 @@ export class DependencyManager {
         );
 
         if (everyImDepIsLoaded) {
-          this.logger.debug(
-            `Every IMD for module ${m.id} has been loaded, adding to queue`
+          logger.debug(
+            `Every IMD for module ${moduleId} has been loaded, adding to queue`
           );
-          loadOrder.add(m.id);
+          loadOrder.add(moduleId);
         }
       });
 
       // prune any loaded modules and continue
-      this.logger.debug("Pruning loaded modules");
+      logger.debug("Pruning loaded modules");
       pruneLoadedModules();
     }
 
-    const moduleOrder: OmnibotModule[] = [];
-    loadOrder.forEach((mId) => {
-      const foundModule = this.modules.find((m) => m.id === mId);
-      if (!foundModule) {
-        throw new ModuleMissingError(`Unable to find ordered module ${mId}!`);
-      }
-
-      moduleOrder.push(foundModule);
-    });
-
-    return moduleOrder;
+    return Array.from(loadOrder);
   }
 
-  public moduleHasModuleDependents(moduleId: string): boolean {
-    if (!this.dependencyTree[moduleId]) {
-      this.logger.warn(
+  public static moduleHasModuleDependents(
+    dependencyTree: DependencyTree,
+    moduleId: string
+  ): boolean {
+    const logger = depMgrRootLogger.createChildLogger(
+      "moduleHasModuleDependents"
+    );
+
+    if (!dependencyTree[moduleId]) {
+      logger.warn(
         `There was an attempt to get module dependents for ${moduleId}, which is not in the tree.`
       );
       return false;
     } else {
       return (
-        this.dependencyTree[moduleId].dependencies.filter((d) =>
+        dependencyTree[moduleId].dependencies.filter((d) =>
           DependencyManager.isIntermoduleDependency(d)
         ).length > 0
       );
     }
   }
 
-  public getModuleDependenciesForModule(moduleId: string): string[] {
-    if (!this.dependencyTree[moduleId]) {
-      this.logger.warn(
+  public static getModuleDependenciesForModule(
+    dependencyTree: DependencyTree,
+    moduleId: string
+  ): string[] {
+    const logger = depMgrRootLogger.createChildLogger(
+      "getModuleDependenciesForModule"
+    );
+    if (!dependencyTree[moduleId]) {
+      logger.warn(
         `There was an attempt to get module dependencies for ${moduleId}, which is not in the tree.`
       );
       return [];
     } else {
-      return this.dependencyTree[moduleId].dependsOn
+      return dependencyTree[moduleId].dependencies
         .filter((d) => DependencyManager.isIntermoduleDependency(d))
         .map((d) => DependencyManager.parseDependency(d).dependencySplit[1]);
     }
@@ -440,6 +477,49 @@ export class DependencyManager {
   }
 }
 
+type DependencyManagerStateProps = {
+  dependencyTree: State["dependencies"]["dependency_tree"];
+  modules: State["config"]["modules"];
+  // satisfiedModuleIds: State["dependencies"]["satisfied_module_ids"]
+};
+
+function mapStateToProps(state: State): DependencyManagerStateProps {
+  return {
+    dependencyTree: state.dependencies.dependency_tree,
+    modules: state.config.modules,
+    // satisfiedModuleIds: state.dependencies.satisfied_module_ids
+  };
+}
+
+type DependencyManagerDispatchProps = {
+  addDependency: typeof addDependencyToTree;
+  addDependentToModule: typeof addDependentToModule;
+  setSatisfiedModuleIds: typeof setSatisfiedModuleIds;
+};
+
+function mapDispatchToProps(
+  dispatch: Dispatch
+): DependencyManagerDispatchProps {
+  return {
+    addDependency: (moduleId, dependencies, dependents) =>
+      dispatch(addDependencyToTree(moduleId, dependencies, dependents)),
+    addDependentToModule: (moduleId, dependent) =>
+      dispatch(addDependentToModule(moduleId, dependent)),
+    setSatisfiedModuleIds: (moduleId) =>
+      dispatch(setSatisfiedModuleIds(moduleId)),
+  };
+}
+
+type DependencyManagerProps = DependencyManagerStateProps &
+  DependencyManagerDispatchProps;
+
+const ConnectedDependencyManager = connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(DependencyManager);
+
+export default ConnectedDependencyManager;
+
 class DependencyCycleDetectedError extends Error {}
 class DependencyResolutionError extends Error {}
-class ModuleMissingError extends Error {}
+// class ModuleMissingError extends Error {}

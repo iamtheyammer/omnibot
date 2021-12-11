@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "config_source": "current_file",
+  "discord_token": "here_is_my_discord_token_dont_share_it",
+  "modules": [
+    {
+      "id": "example-module",
+      "source": {
+        "source": "remote",
+        "url": "https://omnibot.iamtheyammer.com/examples/remote_modules/example_module_config.json"
+      }
+    }
+  ]
+}

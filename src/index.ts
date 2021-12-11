@@ -23,18 +23,6 @@ client.on("ready", async () => {
   logger.success("Connected to Discord!");
 });
 
-async function loadModules() {
-  logger.debug("Loading modules...");
-  // load modules
-  logger.debug(
-    `Discovered ${config.modules.length} modules: ${config.modules
-      .map((m) => m.id)
-      .join(", ")}.`
-  );
-
-  return;
-}
-
 async function init() {
   logger.info("Starting Omnibot...");
   let configFile = "";
@@ -94,8 +82,6 @@ async function init() {
     config.logging.discord_channel = channel;
     pushLogsToDiscord(config.logging.discord_channel);
   }
-
-  await loadModules();
 }
 
 init();

@@ -23,6 +23,14 @@ The module above specifies two dependencies: `omnibot:core` and `npm:axios`.
 Dependencies prefixed with `omnibot` are explained [here](#omnibot-dependencies), and
 dependencies prefixed with `npm` are explained [here](#npm-dependencies).
 
+### Checking For Dependencies
+
+If you're writing a remote module, remember that the person loading the module may have specified their own
+dependency array that takes precedence over your dependency array.
+
+You can use the Omnibot API `omnibot.module.dependencies.hasDependency(dependencyString)` to check whether you
+have access to a specified dependency.
+
 ## Omnibot Dependencies
 
 Dependencies prefixed with `omnibot:` are considered Omnibot dependencies.
@@ -31,7 +39,6 @@ Below is a list of all Omnibot dependencies and their functionality.
 | Dependency | Effects and usage |
 | ---------: | ----------------: |
 | `omnibot:core` | Core Omnibot functionality. See [here](#omnibot-core-dependency) for details. |
-| `omnibot:discordclient` | Allows the module access to the [full Discord client](https://discord.js.org/#/docs/main/stable/class/Client). Consider this like giving someone the Admin permission on your discord server, so be sure you need to give it. |
 | `omnibot:module:<module id>` | Marks <module_id> as a dependency for this module. See [here](#inter-module-dependencies) for more details. |
 | `omnibot:inittimeout:<timeout in milliseconds>` | If a promise is returned from the init function, how long to wait before timing out and loading other modules? |
 
@@ -39,13 +46,11 @@ Below is a list of all Omnibot dependencies and their functionality.
 
 The Omnibot Core Dependency is required for all modules that need to interact with Discord.
 
-It allows modules to:
-
-- Receive events from Discord
+Add it with `omnibot:core`.
 
 ### Inter-Module Dependencies
 
-Sometimes, you might want to write a "core" library that just exposes functions to other modules.
+Sometimes, you might want to write a library that just exposes functions to other modules.
 Omnibot fully supports this!
 
 To make a "dependency module", you'll export all functions like this:
@@ -108,3 +113,10 @@ Adding a dependency is easy: just add the dependency after `npm:`, like this:
 - `npm:oauth`
 
 Packages that come with npm do _not_ need to be added as dependencies, like `fs`.
+
+Remember that the user loading the module may have specified a custom dependency array that does not include your
+npm dependency. Read [Checking for Dependencies](#checking-for-dependencies) for more info.
+
+Currently, adding npm dependencies does **not** support versioning. This may come in a future update, but
+the best solution right now is to use [`@vercel/ncc`](https://www.npmjs.com/package/@vercel/ncc) to compile your
+module with all its dependencies.

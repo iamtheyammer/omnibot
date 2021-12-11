@@ -6,16 +6,18 @@ This guide will get you up and running as fast as possible.
 
 ## Prerequisites
 
-Here's what you'll need to get ready.
+Here's what you'll need.
 
 - A Discord Bot Token ([this guide](https://www.writebots.com/discord-bot-token/) walks you through creating one). Add the bot to a server.
-- Node.js v14 or higher installed on your computer (Heroku isn't supported just yet, but it's coming soon)
+- Node.js v16 or higher installed on your computer (Heroku isn't supported just yet)
   If you don't have it, install it from [nodejs.org](https://nodejs.org).
 
 ## Downloading and configuring Omnibot
 
+Create an empty folder for Omnibot. Make sure you can read and write all files in that folder.
+
 Head [here](https://github.com/iamtheyammer/omnibot/releases/latest) and download the
-`omnibot.bundle.js` file. Save it in a folder you can easily access and edit.
+`omnibot.bundle.js` file. Save it in the folder you just created.
 
 ### Configuring Omnibot
 

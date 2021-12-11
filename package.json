@@ -10,6 +10,7 @@
     "@vercel/ncc": "^0.27.0",
     "eslint": "^7",
     "nodemon": "^2.0.7",
+    "pkg": "^5.5.1",
     "prettier": "^2.2.1",
     "remote-redux-devtools": "^0.5.16",
     "remotedev-server": "^0.3.1",
@@ -38,6 +39,7 @@
     "build:dev": "ncc build src/index.ts --source-map",
     "rdts": "remotedev --hostname localhost --port=8000",
     "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/"
+    "lint:fix": "eslint --fix src/",
+    "package": "yarn build && pkg --compress GZip -o bin/ dist/omnibot.bundle.js"
   }
 }

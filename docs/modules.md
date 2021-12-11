@@ -99,7 +99,7 @@ to the Omnibot JavaScript file.
 
 Loading remote modules is super easy.
 
-However, remote modules from sources you don't trust can allow attackers
+However, modules from sources you don't trust can allow attackers
 to read any file from your computer, steal your bot's discord token, and more.
 Make sure you trust the author of the module.
 
@@ -115,14 +115,14 @@ If you specify a dependencies array, it will be used. No matter what.
 If you want to go along with the module author's recommendation, just leave the
 dependencies array out.
 
-Just add the following to your config file (make sure to change the id and url!):
+Try adding the following to the modules array in your config file (make sure to change the id and url!):
 
 ```json
 {
   "id": "example-remote-module",
   "source": {
     "source": "remote",
-    "url": "https://iamtheyammer.github.io/omnibot/remote_modules/example_module_config.json"
+    "url": "https://omnibot.iamtheyammer.com/examples/remote_modules/example_module_config.json"
   }
 }
 ```
@@ -140,7 +140,7 @@ add the following to your modules array:
   "id": "example-module",
   "source": {
     "source": "remote",
-    "url": "https://iamtheyammer.github.io/omnibot/examples/remote_modules/example_module_config.json"
+    "url": "https://omnibot.iamtheyammer.com/examples/remote_modules/example_module_config.json"
   }
 }
 ```
@@ -150,7 +150,7 @@ add the following to your modules array:
 Ok, so you're a big brain developer. And you want to write a module.
 Don't worry. We got you.
 
-Writing modules is easy. First, you'll specify an `init` function with
+Writing modules is easy. First, you'll export an `init` function with
 one parameter: `omnibot`. The `omnibot` parameter is super useful, so we
 recommend you make it a global. Check out our boilerplate module below:
 
@@ -295,7 +295,7 @@ If this checksum doesn't match the checksum of the downloaded file, the module w
 - `dependencies` is a recommended array of dependencies. If the config file for the Omnibot that
 imports this module specifies a dependencies array, it will **always** be used. This means
   you'll want to check for every dependency you specify.
-  (You can call `omnibot.dependencies.hasDependency()` in your module to ensure dependencies).
+  (You can call `omnibot.module.dependencies.hasDependency(dependencyString)` in your module to ensure dependencies).
   
 ### Remote Module Code
 
@@ -303,3 +303,6 @@ Just host your code at the `code_url` url in the config file.
 
 Remember that when your code changes, you'll need to update your checksum or Omnibot will reject
 the module and show a scary warning to users.
+
+Also, try to set the `Content-Type` header to `application/javascript`. Omnibot will show a not-so-scary yellow warning
+if this isn't the case.

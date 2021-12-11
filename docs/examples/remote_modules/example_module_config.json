@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "Example remote module. Prints to console on every message.",
-  "code_url": "https://iamtheyammer.github.io/omnibot/remote_modules/example_module.js",
+  "code_url": "https://omnibot.iamtheyammer.com/examples/remote_modules/example_module.js",
   "checksum": {
     "sha256": "9f585a6943b6b385451b9bff6a9fcecf8cc3c2b7d1397eed19449c8f3b35cdf2"
   },

@@ -1,8 +1,7 @@
 // Core dependency. Allows Discord Event Listeners.
 export const OMNIBOT_CORE = /^omnibot:core$/;
 
-// Discord Client dependency. Allows access to full discord client.\
-export const OMNIBOT_DISCORDCLIENT = /^omnibot:discordclient$/;
+export const OMNIBOT_FS = /^omnibot:fs$/;
 
 // Init Timeout. How long a module has to load. 0 = infinite.
 export const OMNIBOT_INITTIMEOUT = /^omnibot:inittimeout:[0-9]{1,8}$/;
@@ -16,7 +15,7 @@ export const OMNIBOT_MODULE = /^omnibot:module:[^:]+$/;
 // Array of every valid dependency. Use omnibotDependenciesAreValid() most of the time.
 export const allValidDependencies: RegExp[] = [
   OMNIBOT_CORE,
-  OMNIBOT_DISCORDCLIENT,
+  OMNIBOT_FS,
   OMNIBOT_INITTIMEOUT,
   OMNIBOT_UNLOADTIMEOUT,
   OMNIBOT_MODULE,

@@ -2,6 +2,7 @@ import { Client } from "discord.js";
 import { timeout, TimeoutError } from "promise-timeout";
 import Logger from "../logger";
 import { OmnibotModule } from "../redux/types/config";
+import CoreDependencyFileManager from "./file_manager";
 
 interface Listeners {
   [namespace: string]: {
@@ -20,6 +21,7 @@ export default class CoreDependency {
   private readonly internalLogger;
   private listeners: Listeners = {};
   private modules: ModuleInterdependencies = {};
+  private readonly fs: CoreDependencyFileManager;
 
   constructor(
     m: OmnibotModule,
@@ -33,6 +35,10 @@ export default class CoreDependency {
       `core_dependency:modules:${this.module.id}`
     );
     this.modules = moduleInterdependencies;
+    this.fs = new CoreDependencyFileManager(
+      m.id,
+      m.dependencies.hasDependency("omnibot:fs")
+    );
   }
 
   async unload() {

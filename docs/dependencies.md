@@ -39,6 +39,7 @@ Below is a list of all Omnibot dependencies and their functionality.
 | Dependency | Effects and usage |
 | ---------: | ----------------: |
 | `omnibot:core` | Core Omnibot functionality. See [here](#omnibot-core-dependency) for details. |
+| `omnibot:fs` | Allows reading and writing of files. See [here](/fs) for details. |
 | `omnibot:module:<module id>` | Marks <module_id> as a dependency for this module. See [here](#inter-module-dependencies) for more details. |
 | `omnibot:inittimeout:<timeout in milliseconds>` | If a promise is returned from the init function, how long to wait before timing out and loading other modules? |
 

@@ -112,8 +112,9 @@ dist/
 
 /modules/
 /remote_modules/
+/module_files/
 
-omnibotconfig.json
+/omnibotconfig.json
 
 .DS_Store
 

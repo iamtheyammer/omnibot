@@ -13,6 +13,10 @@ import {
 } from "../redux/actions/modules";
 import { DependencyManager } from "../dependency_manager/dependency_manager";
 import { client as discordClient } from "../index";
+import { access, mkdir } from "fs/promises";
+import { constants as fsConstants } from "fs";
+import CoreDependencyFileManager from "../core_dependency/file_manager";
+import { create } from "lodash";
 
 const logger = new Logger("module_manager");
 
@@ -107,6 +111,41 @@ class ModuleManager extends Module<ModuleManagerProps> {
       logger.debug(`Injecting ${mDep} into ${module.id}`);
       moduleDependencyInjection[mDep] = depExport;
     });
+
+    if (managedModule.dependencies.hasDependency("omnibot:fs")) {
+      // make sure module's directory exists
+      logger.debug(
+        `Module ${module.id} has filesystem access, ensuring directory exists`
+      );
+
+      const moduleDir = CoreDependencyFileManager.getModuleFilesDirectory(
+        module.id
+      );
+      let createDir = false;
+      try {
+        await access(moduleDir, fsConstants.R_OK | fsConstants.W_OK);
+      } catch (e) {
+        createDir = true;
+        if (e.code != "ENOENT") {
+          logger.error(
+            `Error checking for ${module.id}'s file directory: ${e}`
+          );
+        }
+      }
+
+      if (createDir) {
+        logger.debug(`Creating directory for module ${module.id}`);
+        try {
+          await mkdir(moduleDir, { recursive: true });
+        } catch (e) {
+          logger.error(
+            `Unable to create directory for module ${module.id}: ${e}`
+          );
+          throw e;
+        }
+        logger.debug(`Created directory for module ${module.id}: ${moduleDir}`);
+      }
+    }
 
     try {
       logger.info(`Attempting to import from ${normalizedPath}...`);

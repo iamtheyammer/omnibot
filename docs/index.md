@@ -14,3 +14,4 @@ Use the [Getting Started/Quick Start guide here](getting_started.md)
 
 - [Dependencies](/dependencies)
 - [Modules](/modules)
+- [Filesystem API](/fs)
